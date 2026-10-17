@@ -1240,7 +1240,8 @@ struct server_tool_grep_search : server_tool {
 //
 
 static constexpr size_t SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_OUTPUT_SIZE = 16 * 1024; // 16 KB
-static constexpr int    SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT     = 60;        // seconds
+static constexpr int    SERVER_TOOL_EXEC_SHELL_COMMAND_DEFAULT_TIMEOUT = 3600;      // jim-change 1h for long tasks like compile
+static constexpr int    SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT     = 3600;      // jim-change 1h for long tasks like compile
 
 struct server_tool_exec_shell_command : server_tool {
     server_tool_exec_shell_command() {
@@ -1261,7 +1262,7 @@ struct server_tool_exec_shell_command : server_tool {
                     {"type", "object"},
                     {"properties", {
                         {"command",         {{"type", "string"},  {"description", "Shell command to execute"}}},
-                        {"timeout",         {{"type", "integer"}, {"description", string_format("Timeout in seconds (default 10, max %d)", SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT)}}},
+                        {"timeout",         {{"type", "integer"}, {"description", string_format("Timeout in seconds (default %d, max %d)", SERVER_TOOL_EXEC_SHELL_COMMAND_DEFAULT_TIMEOUT, SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT)}}},
                         {"max_output_size", {{"type", "integer"}, {"description", string_format("Maximum output size in bytes (default %zu)", SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_OUTPUT_SIZE)}}},
                     }},
                     {"required", json::array({"command"})},
@@ -1272,7 +1273,7 @@ struct server_tool_exec_shell_command : server_tool {
 
     json invoke(json params, server_tool::stream * st) const override {
         std::string command   = params.at("command").get<std::string>();
-        int    timeout        = json_value(params, "timeout",         10);
+        int    timeout        = json_value(params, "timeout", SERVER_TOOL_EXEC_SHELL_COMMAND_DEFAULT_TIMEOUT);
         size_t max_output     = (size_t) json_value(params, "max_output_size", (int) SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_OUTPUT_SIZE);
 
         timeout    = std::min(timeout,    SERVER_TOOL_EXEC_SHELL_COMMAND_MAX_TIMEOUT);

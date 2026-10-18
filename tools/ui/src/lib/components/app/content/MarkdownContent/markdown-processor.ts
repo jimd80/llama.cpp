@@ -45,12 +45,15 @@ export interface MarkdownProcessor {
 export interface MarkdownProcessorOptions {
 	attachments?: DatabaseMessageExtra[];
 	disableMath?: boolean;
+	/** Render raw HTML found in the markdown instead of escaping it. */
+	allowHtml?: boolean;
 }
 
 const sharedPipelines = new Map<string, MarkdownProcessor>();
-const attachmentPipelines = new WeakMap<object, MarkdownProcessor>();
+const attachmentPipelines = new WeakMap<object, Map<string, MarkdownProcessor>>();
 
 function buildPipeline({
+	allowHtml = false,
 	attachments,
 	disableMath = false
 }: MarkdownProcessorOptions): MarkdownProcessor {
@@ -63,9 +66,14 @@ function buildPipeline({
 
 	proc = proc
 		.use(remarkBreaks) // Convert line breaks to <br>
-		.use(remarkLiteralHtml) // Treat raw HTML as literal text with preserved indentation
-		.use(remarkPreserveCodeMeta) // Preserve code block meta string for filename extraction
-		.use(remarkRehype); // Convert Markdown AST to rehype
+		.use(remarkPreserveCodeMeta); // Preserve code block meta string for filename extraction
+
+	if (!allowHtml) {
+		// Treat raw HTML as literal text with preserved indentation
+		proc = proc.use(remarkLiteralHtml);
+	}
+
+	proc = proc.use(remarkRehype, allowHtml ? { allowDangerousHtml: true } : undefined);
 
 	if (!disableMath) {
 		proc = proc.use(rehypeKatex); // Render math using KaTeX
@@ -94,17 +102,26 @@ function buildPipeline({
 
 export function getMarkdownProcessor(options: MarkdownProcessorOptions): MarkdownProcessor {
 	if (options.attachments && options.attachments.length > 0) {
-		let cached = attachmentPipelines.get(options.attachments);
+		let byOptions = attachmentPipelines.get(options.attachments);
+
+		if (!byOptions) {
+			byOptions = new Map<string, MarkdownProcessor>();
+			attachmentPipelines.set(options.attachments, byOptions);
+		}
+
+		const key = `${Boolean(options.disableMath)}:${Boolean(options.allowHtml)}`;
+
+		let cached = byOptions.get(key);
 
 		if (!cached) {
 			cached = buildPipeline(options);
-			attachmentPipelines.set(options.attachments, cached);
+			byOptions.set(key, cached);
 		}
 
 		return cached;
 	}
 
-	const key = String(Boolean(options.disableMath));
+	const key = `${Boolean(options.disableMath)}:${Boolean(options.allowHtml)}`;
 
 	let cached = sharedPipelines.get(key);
 
